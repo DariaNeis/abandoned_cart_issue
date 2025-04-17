@@ -1,0 +1,813 @@
+<!doctype html>
+<html class="flex flex-col min-h-full" lang="{{ request.locale.iso_code }}">
+<head>
+  {%- liquid
+    assign hide_body = false
+    assign noindex = false
+    assign redirect = false
+
+    case template.name
+      when 'collection'
+        if collection.handle == 'all' and shop.metafields.umg_theme.noindex__collection_default
+          assign noindex = true
+          if shop.metafields.umg_theme.noindex__collection_default_redirect_home
+            assign redirect = shop.url
+          endif
+        endif
+      when 'list-collections'
+        if shop.metafields.umg_theme.noindex__collections-list
+          assign noindex = true
+          if shop.metafields.umg_theme.noindex__collections-list_redirect_home
+            assign redirect = shop.url
+          endif
+        endif
+      when 'product'
+        if shop.metafields.umg_theme.giftwrap__product != blank
+          assign giftWrapVariantToSkip = shop.metafields.umg_theme.giftwrap__product.value.selected_or_first_available_variant.id
+          if product.selected_or_first_available_variant.id == giftWrapVariantToSkip
+            assign noindex = true
+            assign redirect = shop.url
+          endif
+        endif
+        if product.metafields.umg_bundles.bundle_only.value == true
+          assign noindex = true
+          assign redirect = shop.url
+        endif
+      when 'account'
+        if template.suffix == nil
+          assign cards_count = shop.metaobjects.account_overview_card.values_count
+          if cards_count == 0 or cards_count == nil
+            assign noindex = true
+            assign redirect = routes.account_url | append: '?view=orders'
+          endif
+        elsif template.suffix == 'membership' and shop.metafields.umg_customer.enable_singlemusic_memberships_page != true
+          assign noindex = true
+          assign redirect = routes.account_url
+        endif
+      when 'page'
+        if template.suffix == 'umg-design-system' and request.design_mode == false
+          # When umg design system template, and not in the theme editor, redirect to the homepage -- page is not intended to be accessible outside theme editor
+          assign noindex = true
+          assign redirect = shop.url
+        endif
+    endcase
+  -%}
+  {%- if template.name == 'login' or template.name == 'register' -%}
+    {%- if customer -%}
+      {%- assign hide_body = true -%}
+      {%- assign noindex = true -%}
+      <script>
+        window.location.href = '{{ routes.account_url }}' + document.location.search
+      </script>
+    {%- endif -%}
+  {%- endif -%}
+
+  {% if noindex %}
+    <meta name="robots" content="noindex">
+  {% endif %}
+  {% if redirect %}
+    <meta http-equiv="Refresh" content="0; url='{{ redirect }}'" />
+  {% endif %}
+
+  {% if shop.address.country.iso_code == 'US' %}
+    {% assign load_source_defence = true %}
+  {% endif %}
+
+  {% if shop.metafields.umg_theme.enable_source_defence.value == 'enabled' %}
+    {% assign load_source_defence = true %}
+  {% elsif shop.metafields.umg_theme.enable_source_defence.value == 'disabled' %}
+    {% assign load_source_defence = false %}
+  {% endif %}
+
+  {% if load_source_defence %}
+    {% render 'source-defence' %}
+  {% endif %}
+  {% if request.design_mode == false and shop.metafields.umg_storefront.consentmanager_id != blank and shop.metafields.umg_storefront.consentmanager_id != nil %}
+    {% render 'consentmanager' %}
+  {% endif %}
+  {% if shop.metafields.umg_storefront.abtasty_key != blank and shop.metafields.umg_storefront.abtasty_key != nil %}
+    {% # theme-check-disable %}
+    <script type="text/javascript" src="https://try.abtasty.com/{{ shop.metafields.umg_storefront.abtasty_key }}.js"></script>
+    {% # theme-check-enable %}
+  {% endif %}
+
+  {%- liquid
+    assign gtm_enabled = true
+    if template.name == 'password' and settings.password_gtm_enabled == false
+      assign gtm_enabled = false
+    endif
+  -%}
+  <meta charset="utf-8">
+  <meta name="robots" content="noai, noimageai">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
+  {% render 'css-variables-typography' %}
+  {% render 'css-variables-colors' %}
+  {% render 'css-variables-borders' %}
+  {% render 'css-variables-buttons' %}
+  {% render 'css-variables-spacing' %}
+  {{ 'styles-critical.bundle.css' | asset_url | stylesheet_tag: preload: true }}
+  <title>
+    {% assign brand_slogan = shop.brand.slogan | strip %}
+    {%- if template.name == 'password' -%}
+      {{ shop.name }}{% if brand_slogan != empty %} {{ settings.titlebar_title_divider }} {{ brand_slogan -}}{% endif -%}
+    {%- else -%}
+      {% if template.name == 'index' %}
+        {{ shop.name }}{% if page_title != empty %} {{ settings.titlebar_title_divider }} {{- page_title -}}{% endif %}
+      {% else %}
+        {%- liquid
+          capture artist_title
+            if settings.shop_type != 'artist' and template.name == 'product'
+              assign artist_names = '' | split: ','
+              if product.metafields.umg_attributes.artist_reference.value != blank
+                for metaobject_artist in product.metafields.umg_attributes.artist_reference.value
+                  assign artist = metaobject_artist.name | split: ','
+                  assign artist_names = artist_names | concat: artist
+                endfor
+              elsif product.selected_or_first_available_variant.metafields.umg_attributes.artist.value != blank
+                for variant_artist in product.selected_or_first_available_variant.metafields.umg_attributes.artist.value
+                  assign artist = variant_artist | split: ','
+                  assign artist_names = artist_names | concat: artist
+                endfor
+              elsif product.metafields.umg_attributes.artist.value != blank
+                for product_artist in product.metafields.umg_attributes.artist.value
+                  assign artist = product_artist | split: ','
+                  assign artist_names = artist_names | concat: artist
+                endfor
+              endif
+              for artist in artist_names
+                if forloop.last and forloop.index0 > 0 
+                  echo ' & '
+                endif
+                echo artist
+                if forloop.rindex0 > 1 
+                  echo ', '
+                endif
+              endfor
+            endif
+          endcapture
+        %}
+        {% if artist_title != nil and artist_title != blank %}
+          {{ artist_title }} {{ settings.titlebar_title_divider }}
+        {% endif %}
+        {% if page_title != blank %}{{- page_title -}}{% endif %}
+        {%- if current_tags %} {{ settings.titlebar_title_divider }} tagged "{{ current_tags | join: ', ' }}"{% endif -%}
+        {%- if current_page != 1 %} {{ settings.titlebar_title_divider }} Page {{ current_page }}{% endif -%}
+        {%- unless page_title == shop.name %} {{ settings.titlebar_title_divider }} {{ shop.name -}}{% endunless -%}
+      {% endif %}
+    {%- endif -%}
+  </title>
+
+  {% if request.page_type == 'index' %}
+    {% if shop.metafields.umg_theme.site_verification__google != blank %}
+      <meta name="google-site-verification" content="{{ shop.metafields.umg_theme.site_verification__google | strip }}" />
+    {% endif %}
+    {% if shop.metafields.umg_theme.site_verification__facebook != blank %}
+      <meta name="facebook-domain-verification" content="{{ shop.metafields.umg_theme.site_verification__facebook | strip }}" />
+    {% endif %}
+  {% endif %}
+
+  {% render 'build-info' %}
+  <script src="{{ 'runtime.bundle.js' | asset_url }}"></script>
+  <script src="{{ 'geolocation.bundle.js' | asset_url }}"></script>
+  {% if shop.metafields.umg_storefront.gtm_id == blank and shop.metafields.umg_attributes.gtm_id == blank %}
+    {% assign gtm_enabled = false %}
+  {% elsif shop.metafields.umg_attributes.gtm_id != blank %}
+    {% comment %} New GTM ID Metafield for Scalable Pixel {% endcomment %}
+    {% assign gtm_id = shop.metafields.umg_attributes.gtm_id %}
+  {% elsif shop.metafields.umg_storefront.gtm_id != blank %}
+    {% comment %} Deprecated GTM ID for Custom Pixel {% endcomment %}
+    {% comment %} To be removed in future version {% endcomment %}
+    {% assign gtm_id = shop.metafields.umg_storefront.gtm_id %}
+  {% endif %}
+  {% if request.design_mode == false and gtm_enabled == true %}
+    {% if shop.metafields.umg_attributes.consentbanner_onetrust_id %}
+      {% render 'gtm-onetrust', gtm_id: gtm_id %}
+    {% else %}
+      {% render 'gtm', gtm_id: gtm_id %}
+    {% endif %}
+  {% endif %}
+
+  <link rel="canonical" href="{{ canonical_url }}">
+
+  {{ content_for_header }} {% # Header hook for plugins %}
+
+  {%- if settings.typeface_external != blank -%}
+    {%- if settings.typeface_primary_use_external or settings.typeface_secondary_use_external or settings.typeface_tertiary_use_external -%}
+      {% assign external = settings.typeface_external | newline_to_br | strip_newlines | split: '<br />' %}
+      {% for ext in external %}
+        {% # theme-check-disable %}
+        <link rel="stylesheet" href="{{ ext }}">
+        {% # theme-check-enable %}
+      {% endfor %}
+    {%- endif -%}
+  {%- endif -%}
+  {% render 'css-backdrop' %}
+  {{ 'styles.bundle.css' | asset_url | stylesheet_tag | replace: 'media="all"', 'media="print" onload="this.media=`all`;this.removeAttribute(`onload`)"' }}
+  <noscript>{{ 'styles.bundle.css' | asset_url | stylesheet_tag }}</noscript>
+  <script src="{{ 'alpine.bundle.js' | asset_url }}" defer></script>
+  {%- if shop.metafields.umg_attributes.countdown_enabled -%}
+    <script src="{{ 'countdown.bundle.js' | asset_url }}"></script>
+    <script>
+      window.countdownSectionsToRefresh = [];
+    </script>
+  {%- endif -%}
+
+  {%- if settings.global_head_liquid != blank -%}
+    {{ settings.global_head_liquid }}
+  {%- endif -%}
+  {%- if settings.global_head_styles != blank -%}
+    {%- style -%}
+      {{ settings.global_head_styles }}
+    {%- endstyle -%}
+  {%- endif -%}
+
+  {% unless template == 'password' %}
+    {%- assign should_load_zendesk_script = true -%}
+    {%- if shop.address.country.iso_code == 'US' -%}
+      {%- assign help_path = shop.metafields.umg_theme.help_path -%}
+      {%- unless page.handle == help_path.value.handle and help_path != blank and template.name == 'page' -%}
+        {%- assign should_load_zendesk_script = false -%}
+      {%- endunless -%}
+    {%- endif -%}
+
+    {%- if shop.metafields.umg_theme.customer_service__zendesk_id != blank -%}
+      {% assign zendesk_id = shop.metafields.umg_theme.customer_service__zendesk_id %}
+    {%- else -%}
+      {% case shop.address.country.iso_code %}
+        {% when 'UK' %}
+          {% # DEFAULT UK ZENDESK %}
+          {% assign zendesk_id = '4ddd99f2-84bb-430e-88df-560a720be9f2' %}
+        {% when 'US' %}
+          {% # DEFAULT US ZENDESK %}
+          {% assign zendesk_id = '7ebd590b-2549-483a-9cbe-8f73d7a56632' %}
+        {% when 'AU' %}
+          {% # DEFAULT AU ZENDESK %}
+          {% assign zendesk_id = '1328cf2d-a318-442c-a84b-a430b79b8645' %}
+        {% when 'CA' %}
+          {% # DEFAULT CA ZENDESK %}
+          {% assign zendesk_id = 'c3e23c12-5edb-4260-b58b-cf67f10e8328' %}
+      {% endcase %}  
+    {%- endif -%}
+
+    {%- if zendesk_id != blank and should_load_zendesk_script == true -%}
+    {% comment %}theme-check-disable{% endcomment %}
+      <script id="ze-snippet" src="https://static.zdassets.com/ekr/snippet.js?key={{ zendesk_id }}" defer="defer"></script>
+    {% comment %}theme-check-enable{% endcomment %}
+    {%- endif -%}
+  {% endunless %}
+
+  {% if settings.titlebar_themecolor_usecustom %}
+    <meta name="theme-color" content="{{ settings.titlebar_themecolor_lightmode }}" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="{{ settings.titlebar_themecolor_darkmode }}" media="(prefers-color-scheme: dark)">
+  {% endif %}
+
+  {%- if settings.favicon_image != blank -%}
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ settings.favicon_image | image_url: width: 180, height: 180 }}">
+    <link rel="icon" href="{{ settings.favicon_image | image_url: width: 32, height: 32 }}">
+  {%- elsif shop.brand.square_logo != blank %}
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ shop.brand.square_logo | image_url: width: 180, height: 180 }}">
+    <link rel="icon" href="{{ shop.brand.square_logo | image_url: width: 32, height: 32 }}">
+  {%- endif -%}
+
+  {% if settings.custom_cursors_enabled %}
+
+    {% if settings.cursor_standard_image %}
+      <style>
+        html, body, input[type="number"], button:disabled {
+          cursor: url('{{ settings.cursor_standard_image | image_url: width: 32, height: 32 }}'), auto;
+        }
+      </style>
+    {% endif %}
+
+    {% if settings.cursor_pointer_image %}
+      <style>
+        a, button, input[type="submit"], label[for], .btn, .cursor-pointer, select, [role="button"], input[type="checkbox"], input[type="radio"] {
+          cursor: url('{{ settings.cursor_pointer_image | image_url: width: 32, height: 32 }}'), pointer;
+        }
+      </style>
+    {% endif %}
+
+    {% if settings.cursor_zoom_image %}
+      <style>
+        .cursor-zoom-in {
+          cursor: url('{{ settings.cursor_zoom_image | image_url: width: 32, height: 32 }}'), zoom-in;
+        }
+      </style>
+    {% endif %}
+
+  {% endif %}
+  {% render 'seo-meta-tags' %}
+
+  <script>
+    {% comment %}
+      loadYoutubeIframeAPI() is called in video-embedded.liquid
+      despite being loaded in the head tags, this is not a blocking script
+      as it's only called when an embedded video is on the page
+
+      onYouTubeIframeAPIReady() is a callback function fired by
+      the youtube api loaded in block-video-embedded.liquid
+      https://developers.google.com/youtube/iframe_api_reference
+    {% endcomment %}
+    function loadYoutubeIframeAPI() {
+      if(!document.getElementById('youtube_iframe_api')) {
+        const tag = document.createElement('script')
+        tag.id = 'youtube_iframe_api'
+        tag.src = 'https://www.youtube.com/iframe_api'
+        const firstScriptTag = document.getElementsByTagName('script')[0]
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag)
+      }
+    }
+    function onYouTubeIframeAPIReady () {
+      const youtubePlayers = document.querySelectorAll('[data-autoplay="true"][data-youtube-id]')
+      if (youtubePlayers) {
+        youtubePlayers.forEach(function (player) {
+          new YT.Player(player, {
+            events: {
+              onReady: function (e) {
+                e.target.playVideo()
+              }
+            }
+          })
+        })
+      }
+    }
+  </script>
+
+  {% assign template_name = template.name %}
+  {% if template_name == blank or template_name == nil %}
+    {% assign template_name = 'policy' %}
+  {% elsif template.name == 'page' and template.suffix == nil %}
+    {% assign template_name = 'policy' %}
+  {% endif %}
+  {% if template_name == 'policy' %}
+    {{ 'policy.bundle.css' | asset_url | stylesheet_tag }}
+  {% endif %}
+
+  {% if shop.metafields.umg_vendors.dotdigital_behaviour_tracking_enabled and shop.metafields.umg_vendors.dotdigital_insight_id  %}
+    {%- assign customer_email = '' -%}
+    {%- if customer -%}
+      {%- assign customer_email = customer.email -%}
+    {%- endif %}
+
+    <script>
+      window.dotDigital = {
+        shopDomain: '{{ shop.domain }}',
+        insightId: '{{ shop.metafields.umg_vendors.dotdigital_insight_id }}'
+      }
+    </script>
+    {% if template == 'product' %}
+      <script>
+        window.customerEmail = '{{ customer_email }}'
+        window.product = {
+          title: '{{ product.title }}',
+          url: '{{ product.url }}',
+          featuredImage: '{{ product.featured_image }}',
+          sku: '{{ product.selected_or_first_available_variant.sku }}',
+          price: '{{ product.price | money }}',
+          currency: '{{ shop.currency }}',
+          brand: '{{ shop.brand }}'
+        }
+      </script>
+    {% endif %}
+    <script src="{{ 'dot-digital.bundle.js' | asset_url }}" defer></script>
+  {% endif %}
+</head>
+
+{% capture body_classes %}
+  template__{{ template_name }}
+  {% if template.suffix != nil %}template__{{ template_name }}--{{ template.suffix }}{% endif %}
+  flex flex-col grow min-h-full
+  {% if settings.bg_image_attachment != 'fixed' %}relative{% endif %}
+  {% if settings.bg_image_attachment_md != 'fixed' %}md:relative{% else %}md:static{% endif %}
+  {% if request.design_mode %} shopify-designmode{% endif %}
+  scheme-{{ settings.theme_color_scheme | default: 'scheme1' }}
+  {%- render 'case-colors', THEME_COLOR: settings.theme_background, PREFIX: 'c-bg-' -%}
+  {%- render 'case-colors', THEME_COLOR: 'content-base', PREFIX: 'c-text-' %}
+  {% if redirect or hide_body %}opacity-0{% endif %}
+{% endcapture %}
+
+{% assign body_classes = body_classes | split: ' ' | join: ' ' %}
+
+{% assign theme_version = '2.25.0' %}
+
+<body class="{{ body_classes }}" data-theme="rhythm" data-themev="{{ theme_version }}">
+  {% if request.design_mode == false and gtm_enabled == true %}
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ gtm_id }}"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+  {%- endif -%}
+  {%- if request.design_mode -%}
+    {%- render 'theme-editor-warnings', gtm_id: gtm_id -%}
+  {%- endif -%}
+
+  <a class="skip-to-content-link button sr-only focus:not-sr-only" href="#MainContent">
+    {{ "accessibility.skip_to_text" | t }}
+  </a>
+
+  {%- liquid
+    unless template.name == 'password'
+      render 'overlay'
+      sections 'header-group'
+      if request.page_type != "cart"
+        if settings.cart_action != 'notification'
+          echo '<cart-drawer hidden id="cart-drawer" class="cart-drawer fixed z-[1000002] top-0 max-w-11/12 h-full w-full md:max-w-xs motion-safe:animate-none right-0 translate-x-full transition-transform duration-300 ease-in-out">'
+            render 'cart-drawer'
+          echo '</cart-drawer>'
+        endif
+      endif
+    endunless
+
+    capture main_classes
+      echo 'z-10 grow'
+      if template.name == 'login'
+        echo ' flex flex-col min-h-full'
+      endif
+    endcapture
+    assign main_classes = main_classes | split: ' ' | join: ' '
+  -%}
+
+  <main id="MainContent" role="main" class="{{ main_classes }}">
+    {%- liquid
+    if template.name == 'page' and template.suffix != nil
+      sections 'template-pages-under-header-group'
+      assign page_banner = 'disabled'
+      if page.metafields.umg_theme.banner == nil or page.metafields.umg_theme.banner == 'default'
+        assign page_banner = settings.page_banner
+      else
+        assign page_banner = page.metafields.umg_theme.banner
+      endif
+      if template.suffix == 'umg-design-system'
+        assign page_banner = 'disabled'
+      endif
+      case page_banner
+        when 'standard'
+          section 'template-page'
+      endcase
+    elsif template.name == 'collection'
+      sections 'template-collections-under-header-group'
+      assign collection_banner = 'disabled'
+      if collection.metafields.umg_theme.banner == nil or collection.metafields.umg_theme.banner == 'default'
+        assign collection_banner = settings.collection_banner
+      else
+        assign collection_banner = collection.metafields.umg_theme.banner | replace: ' ', '_'
+      endif
+      unless collection_banner == 'disabled'
+        section 'template-collection-banner'
+      endunless
+    elsif template.name contains 'artist' and template.directory == 'metaobject'
+      sections 'template-artist-under-header-group'
+      assign artist_banner = 'disabled'
+      if metaobject.banner == nil or metaobject.banner == 'default'
+        assign artist_banner = settings.artist_banner
+      else
+        assign artist_banner = metaobject.banner
+      endif
+      case artist_banner
+        when 'standard'
+          section 'template-metaobject-artist-banner'
+      endcase
+    endif
+    echo content_for_layout
+    -%}
+  </main>
+
+  <script src="{{ 'theme.bundle.js' | asset_url }}" defer></script>
+
+  {% # Only render GWP data + product form when enabled %}
+  {%- if shop.metafields.umg_features.gwp_enabled == true and shop.metafields.umg_attributes.gwp_config != blank -%}
+    <script>
+      window.umgGwp = {
+        config: {{ shop.metafields.umg_attributes.gwp_config.value | json }},
+        spendProducts: [
+          {%- if shop.metafields.umg_attributes.gwp_spend_products_from_collections.value -%}
+            {%- for gwp_collection in shop.metafields.umg_attributes.gwp_spend_products_from_collections.value -%}
+              {%- paginate gwp_collection.products by 1000 -%}
+                {%- for item in gwp_collection.products limit: 1000 -%}
+                  {%- unless item.metafields.umg_attributes.gwp_spend_eligible.value == true -%}
+                    {%- continue -%}
+                  {%- endunless -%}
+                  {{- item.id -}}
+                  {%- unless forloop.last -%}
+                    ,
+                  {%- endunless -%}
+                {%- endfor -%}
+              {%- endpaginate -%}
+            {%- endfor -%}
+          {%- elsif shop.metafields.umg_attributes.gwp_spend_products.value -%}
+            {%- for item in shop.metafields.umg_attributes.gwp_spend_products.value -%}
+              {{- item.id -}}
+              {%- unless forloop.last -%}
+                ,
+              {%- endunless -%}
+            {%- endfor -%}
+          {%- endif -%}
+        ],
+        getProducts: [
+          {%- for item in shop.metafields.umg_attributes.gwp_get_products.value -%}
+            {{- item.id -}}
+            {%- unless forloop.last -%}
+              ,
+            {%- endunless -%}
+          {%- endfor -%}
+        ]
+      }
+    </script>
+    {% for item in shop.metafields.umg_attributes.gwp_get_products.value %}
+      {% if item.available %}
+        <div class="hidden" data-gwp-item>
+          {% render 'product-form',
+            product: item,
+            controls: false,
+            controls_type: false,
+            purchase_limit: item.metafields.umg_attributes.purchase_limit,
+            id: 'gwp-product',
+            product_type: item.metafields.umg_attributes.product_type.value,
+            section: 'section',
+            meta_variant: item.selected_or_first_available_variant.metafields
+          %}
+          {%- liquid
+            # TODO: Some sort of float messaging to be made visible? Eg, product has no quantity left?
+            comment
+            assign purchase_limit = gwp_product.metafields.umg_attributes.purchase_limit
+            unless purchase_limit == 0 or purchase_limit == nil
+              assign error_title = gwp_variant.title
+              if product.has_only_default_variant
+                assign error_title = gwp_product.title
+              endif
+              render 'purchase-limit-message', section_id: 'gwp-product', variant_id: gwp_variant.id, additional_classes: 'text_body_sm py-sm-sm px-sm-sm'
+            endunless
+            endcomment
+          -%}
+        </div>
+        {% break %}
+      {% endif %}
+    {% endfor %}
+  {%- endif -%}
+
+  <script>
+    window.shop_iso_code = "{{ shop.address.country.iso_code }}";
+    window.shopUrl = '{{ request.origin }}';
+    window.currentCurrency = '{{ cart.currency.iso_code }}';
+    window.routes = {
+      {% comment %} root_url: '{{ routes.root_url }}', {% endcomment %}
+      cart_add_url: '{{ routes.cart_add_url }}',
+      cart_change_url: '{{ routes.cart_change_url }}',
+      cart_update_url: '{{ routes.cart_update_url }}',
+      predictive_search_url: '{{ routes.predictive_search_url }}',
+      privacy_policy_url: '{{ shop.privacy_policy.url }}',
+      legal_notice_url: '{{ shop.legal_notice.url }}',
+      terms_of_sale_url: '{{ shop.terms_of_sale.url }}'
+    };
+    window.cartStrings = {
+      error: `{{ 'cart.cart_error' | t }}`,
+      quantityError: `{{ 'cart.cart_quantity_error_html' | t: quantity: '[quantity]' }}`
+    };
+    window.variantStrings = {
+      addToCart: `{{ 'products.product.add_to_cart' | t }}`,
+      soldOut: `{{ 'products.product.sold_out' | t }}`,
+      unavailable: `{{ 'products.product.unavailable' | t }}`,
+    };
+    window.accessibilityStrings = {
+      imageAvailable: `{{ 'products.product.media.image_available' | t: index: '[index]' }}`,
+      shareSuccess: `{{ 'general.share.success_message' | t }}`,
+      pauseSlideshow: `{{ 'sections.slideshow.pause_slideshow' | t }}`,
+      playSlideshow: `{{ 'sections.slideshow.play_slideshow' | t }}`,
+    };
+    window.shareStrings = {
+      copyToClipboard: "{{ 'general.share.copy_to_clipboard' | t }}",
+      successMessage: "{{ 'general.share.success_message' | t }}",
+      copyToClipboardError: "{{ 'general.share.copy_to_clipboard_error' | t }}",
+      shareUrlError: "{{ 'general.share.share_url_error' | t }}"
+    };
+    window.quickShopStrings = {
+      productError: "{{ 'card.quick_shop.product_error' | t }}",
+    };
+    {% if shop.address.country.iso_code == 'US' or shop.address.country.iso_code == 'FR' or shop.address.country.iso_code == 'AU' or shop.address.country.iso_code == 'CA' or shop.address.country.iso_code == 'SE' or shop.address.country.iso_code == 'DE' or shop.address.country.iso_code == 'RO' %}
+      {% assign shipDateLabel = 'products.product.ship_date' | t %}
+      {% assign shipDateLabelTitled = 'products.product.ship_date_w_title_html' | t %}
+      {% if shop.address.country.iso_code == 'FR' %}
+        {% assign shipDateLabel = 'products.product.delivery_from_date' | t %}
+        {% assign shipDateLabelTitled = 'products.product.delivery_from_date_w_title_html' | t %}
+      {% endif %}
+      window.shipDateLabel = '{{ shipDateLabel }}';
+      window.shipDateLabelTitled = '{{ shipDateLabelTitled }}';
+      {% if shop.address.country.iso_code == 'FR' %}
+        {% assign shipLocaleFormat = 'en-GB' %}
+        {% if shop.locale == 'fr' %}
+          {% assign shipLocaleFormat = 'fr-FR' %}
+        {% endif %}
+        {% comment %} used in umg-dates {% endcomment %}
+        window.shipLocaleFormat = '{{ shipLocaleFormat }}';
+      {% elsif shop.address.country.iso_code == 'DE' or shop.address.country.iso_code == 'SE' or shop.address.country.iso_code == 'RO' %}
+        {% assign shipLocaleFormat = 'en-GB' %}
+        {% if shop.locale == 'de' %}
+          {% assign shipLocaleFormat = 'de-DE' %}
+        {% elsif shop.locale == 'sv' %}
+          {% assign shipLocaleFormat = 'sv-SE' %}
+        {% elsif shop.locale == 'ro' %}
+          {% assign shipLocaleFormat = 'ro-RO' %}
+        {% endif %}
+        {% comment %} used in umg-dates {% endcomment %}
+        window.shipLocaleFormat = '{{ shipLocaleFormat }}';
+      {% endif %}
+    {% endif %}
+    {%- if request.design_mode -%}
+      window.designerModeWarnings = {
+        warningGtm: `{{ 'theme_warnings.gtm' | t }}`,
+        warningImage: `{{ 'theme_warnings.image_alt' | t }}`
+      }
+    {%- endif %}
+  </script>
+  {% unless template.name == 'password' %}
+    {% sections 'footer-group' %}
+  {% endunless %}
+
+  <script src="{{ 'utm-params.bundle.js' | asset_url }}" defer="defer"></script>
+  <script src="{{ 'section-render.bundle.js' | asset_url }}" defer="defer"></script>
+  {% unless template.name == 'password' %}
+    <script src="{{ 'product.bundle.js' | asset_url }}" defer="defer"></script>
+    {%- if request.page_type == 'cart' -%}
+      <script src="{{ 'template-cart.bundle.js' | asset_url }}" defer="defer"></script>
+    {%- else -%}
+      <script src="{{ 'cart-drawer.bundle.js' | asset_url }}" defer="defer"></script>
+      <script src="{{ 'content-overlay.bundle.js' | asset_url }}" defer="defer"></script>
+    {%- endif -%}
+    {%- if shop.metafields.umg_theme.giftwrap__product != blank -%}
+      <script src="{{ 'cart-giftwrap.bundle.js' | asset_url }}" defer="defer"></script>
+    {%- endif -%}
+  {% endunless %}
+
+  {% if settings.predictive_search_enabled %}
+    <script src="{{ 'predictive-search.bundle.js' | asset_url }}" defer="defer"></script>
+  {% endif %}
+
+  {%- if request.design_mode -%}
+    <script src="{{ 'editor.bundle.js' | asset_url }}" defer="defer"></script>
+    <link rel="stylesheet" href="{{ 'editor.bundle.css' | asset_url }}">
+  {%- endif -%}
+
+  <script src="{{ 'share.bundle.js' | asset_url }}" defer="defer"></script>
+
+  {%- liquid
+    assign show_bg = true
+    if template.name == 'password' and settings.password_store_bg_image_enabled == false
+      assign show_bg = false
+    endif
+    if show_bg == true
+      sections 'background-group'
+    endif
+  -%}
+
+  {%- if settings.global_body_end_liquid != blank -%}
+    {{ settings.global_body_end_liquid }}
+  {%- endif -%}
+  {%- if settings.global_body_end_styles != blank -%}
+    {%- style -%}
+      {{ settings.global_body_end_styles }}
+    {%- endstyle -%}
+  {%- endif -%}
+
+  {%- unless request.design_mode -%}
+    <script>
+      {% assign central_europe_country_list = 'DE, DK, SE, RO, PL' | split: ', ' %}
+      {% case template.name %}
+        {% when 'collection' %}
+        {% when 'list-collection' %}
+        {% when 'product' %}
+          {% comment %}
+            TODO: Determine if we can replace with standard product_viewed or page_viewed event
+          {% endcomment %}
+          Shopify.analytics.publish('view_product', {
+            currency: '{{ cart.currency.iso_code }}',
+            items: [
+              {
+                item_name: '{{ product.title | escape }}',
+                item_id: '{{ product.id }}',
+                item_category: '{{ collection.title | escape }}',
+                item_variant: '{{ product.selected_or_first_available_variant.title | escape}}',
+                upc: '{{ product.selected_or_first_available_variant.sku }}',
+                price: {{ product.selected_or_first_available_variant.price | money_without_currency | replace: ',', '.' }},
+                {% if central_europe_country_list contains shop.address.country.iso_code %}
+                  item_brand: '{{ shop.metafields.umg_attributes.artist.value | join: ', ' | escape }}',
+                  category: '{{ product.type | escape }}',
+                  barcode: '{{ product.selected_or_first_available_variant.barcode }}',
+                  item_sku: '{{ product.selected_or_first_available_variant.sku }}',
+                  item_group_id: '{{ product.selected_or_first_available_variant.sku | truncate: 6, '' }}'
+                {% endif %}
+              }
+            ]
+            })
+        {% when 'page' %}
+        {% when 'cart' %}
+          {% comment %}
+            TODO: Determine if we can replace with standard cart_viewed event or page_viewed event
+          {% endcomment %}
+          {% assign giftwrapped = false %}
+          Shopify.analytics.publish('view_cart', {
+            currency: '{{ cart.currency.iso_code }}',
+            value: {{ cart.total_price | money_without_currency | replace: ',', '.' }},
+            items: [
+              {%- for item in cart.items -%}
+                {%- if item.sku == 'GIFTWRAP' -%}
+                  {% assign giftwrapped = true %}
+                {%- else -%}
+                  {
+                    item_name: '{{ item.product.title | escape }}',
+                    item_id: '{{ item.product_id }}',
+                    item_category: '',
+                    item_variant: '{{ item.variant.title | escape }}',
+                    upc: '{{ item.sku }}',
+                    price: {{ item.original_price | money_without_currency | replace: ',', '.' }},
+                    quantity: {{ item.quantity }},
+                    {% if central_europe_country_list contains shop.address.country.iso_code %}
+                      {% if item.product.metafields.umg_attributes.artist != blank %}
+                        item_brand: '{{ item.product.metafields.umg_attributes.artist.value | join: ', ' | escape }}',
+                      {% endif %}
+                      category: '{{ item.product.type | escape }}',
+                      barcode: '{{ item.variant.barcode }}',
+                      item_sku: '{{ item.sku }}',
+                      item_group_id: '{{ item.sku | truncate: 6, '' }}'
+                    {% endif %}
+                  }{%- unless forloop.last -%},{%- endunless -%}
+                {%- endif -%}
+              {% endfor %}
+            ],
+            gift: {{ giftwrapped }}
+          })
+      {% endcase %}
+
+      {% if central_europe_country_list contains shop.address.country.iso_code %}
+        {%- assign logged_in = false -%}
+        {%- assign customer_email = '' -%}
+        {%- if customer -%}
+          {%- assign logged_in = true -%}
+          {%- assign customer_email = customer.email -%}
+        {%- endif %}
+        {%- assign page_type = template.name -%}
+          Shopify.analytics.publish('page_meta', {
+            event: 'page_meta',
+            page_type: '{{ page_type }}',
+            {% if  shop.metafields.umg_attributes.shop_imprint != blank %}
+              imprint: '{{ shop.metafields.umg_attributes.shop_imprint.value }}',
+            {% endif %}
+            page_division: '{{ shop.metafields.umg_attributes.shop_division.value }}',
+            shop_code: '{{ shop.metafields.umg_attributes.legacy_de_shop_code.value }}',
+            shop_type: '{{ settings.shop_type }}',
+            shop_status: '{{ shop.metafields.umg_theme.shop_status.value }}',
+            currency: '{{ shop.currency }}',
+            artist_name: '{{ shop.metafields.umg_attributes.artist.value | join: ', ' | escape }}',
+            artist_id_pim: '{{ shop.metafields.umg_attributes.artist_id.value }}',
+            artist_id_party: '', //will be the global artist id
+            artist_genre: '', // will be added to pimcore
+            artist_subgenre: '', // will be added to pimcore
+            environment: 'production',
+            country_code: '{{ shop.address.country_code }}',
+            framework: 'shopify',
+            language: '{{ request.locale.iso_code }}',
+            shopify_theme: 'global',
+            shopify_version: '{{ theme_version }}',
+            user: {
+              {% if customer -%}
+                user_id: '{{ customer.id }}',
+                email: '{{ customer_email }}',
+              {%- endif -%}
+              logged_in: '{{ logged_in }}'
+            },
+          })
+      {%- endif -%}
+    </script>
+    {% if template.name == 'product' or template.name == 'index' %}
+      <script src="{{ 'url-params.bundle.js' | asset_url }}"></script>
+    {% endif %}
+  {%- endunless -%}
+
+  {% if shop.metafields.umg_vendors.dotdigital_behaviour_tracking_enabled and shop.metafields.umg_vendors.dotdigital_insight_id %}
+    <script src="{{ 'dotdigital-site-tracking.bundle.js' | asset_url }}" defer></script>
+  {% endif %}
+
+  {% if shop.metafields.umg_vendors.dotdigital_behaviour_tracking_enabled and shop.metafields.umg_vendors.dotdigital_insight_id and shop.metafields.umg_vendors.dotdigital_program_id  %}
+    {%- assign customer_email = '' -%}
+    {%- if customer -%}
+      {%- assign customer_email = customer.email -%}
+    {%- endif %}
+
+    <script>
+      window.customerEmail = '{{ customer_email }}'
+      window.customerAcceptsMarketing = '{{ customer.accepts_marketing }}'
+      window.dotDigitalCartInsights = {
+        programId: '{{ shop.metafields.umg_vendors.dotdigital_program_id }}',
+        currency: '{{ shop.currency }}',
+        subtotal: '{{ cart.items_subtotal_price |  money_without_currency }}',
+        discountAmount: '{{ cart.total_discount |  money_without_currency }}',
+        grandTotal: '{{ cart.total_price |  money_without_currency}}',
+        cartUrl: '{{ shop.url }}',
+        lineItems: '[]'
+      }
+    </script>
+    <script src="{{ 'dotdigital-cart-insight.bundle.js' | asset_url }}" defer></script>
+  {% endif %}
+{% comment %} Dotdigital CartInsight: Start {% endcomment %}{% if content_for_header contains "https:\/\/r2-t.trackedlink.net\/shopify\/ddgtag.js" and customer.email %} {% assign track_non_subscribed = true %} {% if customer.accepts_marketing or track_non_subscribed %} <script> window.dmPtId = function() { window.dmPt('identify', '{{ customer.email }}'); } </script> {% endif %} {% endif %}{% comment %} Dotdigital CartInsight: End {% endcomment %}
+</body>
+</html>
